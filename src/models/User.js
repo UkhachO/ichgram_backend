@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true, minlength: 8 },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
+
+    bio: { type: String, trim: true, maxlength: 300 },
+    profileImageUrl: { type: String }, 
+    profileImageId: { type: String }, 
   },
   {
     timestamps: true,

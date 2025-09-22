@@ -4,6 +4,7 @@ import 'dotenv/config';
 
 import connectDB from './config/db.js';
 import authRoutes from './routes/auth.routes.js';
+import userRoutes from './routes/users.routes.js';
 import { errorHandler } from "./middlewares/error.js"; 
 
 const startServer = async () => {
@@ -25,6 +26,8 @@ const startServer = async () => {
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRoutes);
+
+app.use('/api/users', userRoutes);
 
 app.use(errorHandler);
 
