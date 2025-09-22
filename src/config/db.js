@@ -1,16 +1,11 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import config from './config.js';
 
 const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB Atlas connected');
-  } catch (err) {
-    console.error('MongoDB connection error:', err.message);
-    process.exit(1);
-  }
+  if (!config.mongoUri) throw new Error('MONGO_URI is required');
+  mongoose.set('strictQuery', true);
+  await mongoose.connect(config.mongoUri);
+  console.log('MongoDB Atlas connected');
 };
 
 export default connectDB;
