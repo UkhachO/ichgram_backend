@@ -1,39 +1,13 @@
-import { signToken } from '../utils/jwt.js';
-import { findByEmailOrUsername, createUser } from '../services/auth.service.js';
-import { ok, created, fail } from '../utils/respond.js';
-import User from '../models/User.js';
+import * as authService from '../services/auth.service.js';
+import { registerSchema, loginSchema } from '../schemas/auth.schemas.js';
 
 export const register = async (req, res, next) => {
   try {
-    const { fullName, username, email, password, role } = req.body;
-
-    const exists = await User.findOne({
-      $or: [
-        { email: email.toLowerCase() },
-        { username: username.toLowerCase() },
-      ],
+    const payload = await registerSchema.validateAsync(req.body, {
+      abortEarly: false,
     });
-    if (exists) return fail(res, 409, 'User already exists');
-
-    const user = await createUser({
-      fullName,
-      username: username.toLowerCase(),
-      email: email.toLowerCase(),
-      password,
-      role: role ?? 'user',
-    });
-
-    const token = signToken({ id: user._id.toString() });
-    return created(res, {
-      token,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    const data = await authService.register(payload);
+    res.status(201).json({ ok: true, data });
   } catch (e) {
     next(e);
   }
@@ -41,30 +15,32 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { emailOrUsername, password } = req.body;
-
-    const user = await findByEmailOrUsername(
-      (emailOrUsername || '').toLowerCase()
-    );
-    if (!user) return fail(res, 401, 'Invalid credentials');
-
-    const match = await user.comparePassword(password);
-    if (!match) return fail(res, 401, 'Invalid credentials');
-
-    const token = signToken({ id: user._id.toString() });
-    return ok(res, {
-      token,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
+    const payload = await loginSchema.validateAsync(req.body, {
+      abortEarly: false,
     });
+    const meta = { ip: req.ip, userAgent: req.headers['user-agent'] };
+    const data = await authService.login({ ...payload, meta });
+    res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
   }
 };
 
-export const me = async (req, res) => ok(res, { user: req.user });
+export const logout = async (req, res, next) => {
+  try {
+    const tid = req.user?.tid;
+    await authService.logout({ userId: req.user?.sub, tid });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const me = async (req, res, next) => {
+  try {
+    const data = await authService.me(req.user?.sub);
+    res.json({ ok: true, data });
+  } catch (e) {
+    next(e);
+  }
+};
