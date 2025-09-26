@@ -1,15 +1,39 @@
 import { Router } from 'express';
-import * as ctrl from '../controllers/auth.controller.js';
-import * as v from '../controllers/verify.controller.js'; 
+import authenticate from '../middlewares/authenticate.js';
+import {
+  register,
+  login,
+  logout,
+  me,
+  forgotPassword,
+  resetPassword,
+  verifyEmail,
+} from '../controllers/auth.controller.js';
+import validateBody from '../decorators/validateBody.js';
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from '../schemas/auth.schemas.js';
+
 const router = Router();
 
-router.post('/register', ctrl.register);
-router.post('/login', ctrl.login);
-router.post('/logout', ctrl.logout);
-router.get('/me', ctrl.me);
+router.post('/register', validateBody(registerSchema), register);
+router.post('/login', validateBody(loginSchema), login);
+router.post('/logout', authenticate, logout);
+router.get('/me', authenticate, me);
+router.get('/verify/:token', verifyEmail);
 
-// 👇 нові
-router.post('/verify/send', v.resend);
-router.get('/verify/:token', v.verify);
+router.post(
+  '/password/forgot',
+  validateBody(forgotPasswordSchema),
+  forgotPassword
+);
+router.post(
+  '/password/reset',
+  validateBody(resetPasswordSchema),
+  resetPassword
+);
 
 export default router;

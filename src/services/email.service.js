@@ -24,3 +24,18 @@ export async function sendVerificationEmail({ to, link }) {
   `;
   await mailer.sendMail({ from, to, subject, html });
 }
+
+export async function sendResetPasswordEmail({ to, link }) {
+  const from = `"ichgram" <${SMTP_USER}>`;
+  const subject = 'Відновлення паролю';
+  const html = `
+    <div style="font-family:Inter,Arial,sans-serif;line-height:1.6">
+      <h2>Відновлення паролю</h2>
+      <p>Щоб змінити пароль, перейдіть за посиланням (діє обмежений час):</p>
+      <p><a href="${link}" target="_blank" rel="noopener">${link}</a></p>
+      <hr/>
+      <p style="font-size:12px;color:#666">Якщо це були не ви — проігноруйте лист.</p>
+    </div>
+  `;
+  await mailer.sendMail({ from, to, subject, html });
+}
