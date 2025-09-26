@@ -11,7 +11,7 @@ const authGuard = (req, _res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // { sub, tid, role, iat, exp }
+    req.user = decoded; 
     next();
   } catch {
     next(HttpError(401, 'Unauthorized'));

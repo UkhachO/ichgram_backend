@@ -4,15 +4,48 @@ import User from '../db/models/User.js';
 import Session from '../db/models/Session.js';
 import HttpError from '../utils/HttpError.js';
 import { signAccessToken } from '../utils/tokens.js';
+import { sendVerificationEmail } from './email.service.js';
+import { generateVerifyToken, hashVerifyToken } from '../utils/verification.js';
+
+const TTL_MS = 24 * 60 * 60 * 1000;
 
 export const register = async ({ fullName, username, email, password }) => {
+  fullName = String(fullName).trim();
+  username = String(username).toLowerCase().trim();
+  email = String(email).toLowerCase().trim();
+
   const exists = await User.findOne({ $or: [{ email }, { username }] });
-  if (exists) throw HttpError(400, 'User already exists');
+  if (exists)
+    throw HttpError(409, 'User with this email or username already exists');
 
-  const hash = await bcrypt.hash(password, 10);
-  const user = await User.create({ fullName, username, email, password: hash });
+  const pwdHash = await bcrypt.hash(password, 10);
 
-  return { id: user.id, email: user.email, username: user.username };
+  const user = await User.create({
+    fullName,
+    username,
+    email,
+    password: pwdHash,
+  });
+
+  const rawToken = generateVerifyToken(32);
+  const tokenHash = await hashVerifyToken(rawToken);
+  user.verifyTokenHash = tokenHash;
+  user.verifyTokenExpiresAt = new Date(Date.now() + TTL_MS);
+  await user.save();
+
+  const verifyLink = `${process.env.APP_URL}/api/auth/verify/${rawToken}`;
+  sendVerificationEmail({ to: user.email, link: verifyLink }).catch(
+    console.error
+  );
+
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    username: user.username,
+    email: user.email,
+    isVerified: user.isVerified,
+    message: 'Registered. Verification email sent.',
+  };
 };
 
 export const login = async ({ emailOrUsername, password, meta }) => {

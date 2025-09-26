@@ -20,8 +20,12 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     isVerified: { type: Boolean, default: false },
+
     avatarUrl: { type: String },
     avatarPublicId: { type: String },
+
+    verifyTokenHash: { type: String, default: null },
+    verifyTokenExpiresAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
