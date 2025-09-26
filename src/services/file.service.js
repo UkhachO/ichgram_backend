@@ -23,3 +23,22 @@ export const deleteFromCloudinary = async (publicId) => {
   await cloudinary.uploader.destroy(publicId);
   return { ok: true };
 };
+
+export const uploadBufferToCloudinary = (buffer, opts = {}) =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: opts.folder || 'uploads',
+        resource_type: 'image',
+        overwrite: true,
+      },
+      (err, res) =>
+        err
+          ? reject(err)
+          : resolve({ url: res.secure_url, publicId: res.public_id })
+    );
+    stream.end(buffer);
+  });
+
+
+

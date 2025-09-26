@@ -8,13 +8,18 @@ import {
   sendVerificationEmail,
   sendResetPasswordEmail,
 } from './email.service.js';
-import { generateVerifyToken, hashVerifyToken } from '../utils/verification.js';
+import {
+  generateVerifyToken,
+  hashVerifyToken,
+  isVerifyTokenMatch,
+} from '../utils/verification.js';
 import {
   generateResetTokenRaw,
   hashResetToken,
 } from '../utils/resetPassword.js';
 
-const TTL_MS = 24 * 60 * 60 * 1000;
+const VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const RESET_TTL_MS = 60 * 60 * 1000; // 1h
 
 export const register = async ({ fullName, username, email, password }) => {
   fullName = String(fullName).trim();
@@ -22,42 +27,47 @@ export const register = async ({ fullName, username, email, password }) => {
   email = String(email).toLowerCase().trim();
 
   const exists = await User.findOne({ $or: [{ email }, { username }] });
-  if (exists)
-    throw HttpError(409, 'User with this email or username already exists');
+  if (exists) throw HttpError(409, 'User already exists');
 
   const pwdHash = await bcrypt.hash(password, 10);
+
+  const rawVerify = generateVerifyToken(32);
+  const verifyTokenHash = await hashVerifyToken(rawVerify);
+  const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TTL_MS);
 
   const user = await User.create({
     fullName,
     username,
     email,
     password: pwdHash,
+    isVerified: false,
+    verifyTokenHash,
+    verifyTokenExpiresAt,
   });
 
-  const rawToken = generateVerifyToken(32);
-  const tokenHash = await hashVerifyToken(rawToken);
-  user.verifyTokenHash = tokenHash;
-  user.verifyTokenExpiresAt = new Date(Date.now() + TTL_MS);
-  await user.save();
-
-  const verifyLink = `${process.env.APP_URL}/api/auth/verify/${rawToken}`;
-  sendVerificationEmail({ to: user.email, link: verifyLink }).catch(
-    console.error
-  );
+  const appUrl =
+    (process.env.APP_URL || '').replace(/\/+$/, '') || 'http://localhost:3000';
+  const link = `${appUrl}/api/auth/verify/${rawVerify}`;
+  await sendVerificationEmail({ to: email, link });
 
   return {
-    id: user.id,
-    fullName: user.fullName,
-    username: user.username,
-    email: user.email,
-    isVerified: user.isVerified,
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      username: user.username,
+      email: user.email,
+      isVerified: user.isVerified,
+    },
     message: 'Registered. Verification email sent.',
   };
 };
 
 export const login = async ({ emailOrUsername, password, meta }) => {
   const user = await User.findOne({
-    $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
+    $or: [
+      { email: emailOrUsername.toLowerCase() },
+      { username: emailOrUsername.toLowerCase() },
+    ],
   });
   if (!user) throw HttpError(401, 'Invalid credentials');
 
@@ -68,56 +78,54 @@ export const login = async ({ emailOrUsername, password, meta }) => {
   const token = signAccessToken({
     sub: user.id,
     tid: tokenId,
-    role: user.role,
   });
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  await Session.create({ userId: user.id, tokenId, expiresAt, ...meta });
+  await Session.create({
+    userId: user.id,
+    tokenId,
+    expiresAt,
+    ip: meta?.ip,
+    userAgent: meta?.userAgent,
+  });
 
   return {
     token,
     user: {
       id: user.id,
-      email: user.email,
+      fullName: user.fullName,
       username: user.username,
-      role: user.role,
+      email: user.email,
+      isVerified: user.isVerified,
+      avatarUrl: user.avatarUrl ?? null,
     },
   };
 };
 
-export const logout = async ({ userId, tid }) => {
-  if (!tid) return { ok: true };
-  await Session.deleteOne({ userId, tokenId: tid });
+export const logout = async ({ userId, tokenId }) => {
+  if (!userId || !tokenId) return { ok: true };
+  await Session.deleteOne({ userId, tokenId });
   return { ok: true };
 };
 
-export const me = async (userId) => {
-  const user = await User.findById(userId).select('-password');
-  if (!user) throw HttpError(404, 'User not found');
-  return user;
-};
-
-
 export const startPasswordReset = async (email) => {
-  const normalized = String(email).toLowerCase().trim();
-  const user = await User.findOne({ email: normalized });
-
+  email = String(email).toLowerCase().trim();
+  const user = await User.findOne({ email });
   if (!user) return { ok: true };
 
   const raw = generateResetTokenRaw();
   const hash = hashResetToken(raw);
-  const exp = new Date(Date.now() + 30 * 60 * 1000); // 30 хв
 
   user.resetPasswordTokenHash = hash;
-  user.resetPasswordTokenExp = exp;
+  user.resetPasswordTokenExp = new Date(Date.now() + RESET_TTL_MS);
   user.resetPasswordUsed = false;
   await user.save();
 
-  const resetBase =
-    process.env.RESET_PASSWORD_URL ||
-    `${process.env.FRONTEND_URL}/reset-password`;
-  const link = `${resetBase}?token=${raw}`;
-  sendResetPasswordEmail({ to: user.email, link }).catch(console.error);
+  const appUrl =
+    (process.env.APP_URL || '').replace(/\/+$/, '') || 'http://localhost:3000';
+
+  const link = `${appUrl}/reset-password?token=${raw}`;
+  await sendResetPasswordEmail({ to: email, link });
 
   return { ok: true };
 };
@@ -144,4 +152,30 @@ export const finishPasswordReset = async (rawToken, newPassword) => {
   await user.save();
 
   return { ok: true };
+};
+
+export const finishEmailVerification = async (rawToken) => {
+
+  const candidates = await User.find({
+    isVerified: false,
+    verifyTokenHash: { $ne: null },
+    verifyTokenExpiresAt: { $gt: new Date() },
+  });
+
+  let user = null;
+  for (const c of candidates) {
+    const ok = await isVerifyTokenMatch(rawToken, c.verifyTokenHash);
+    if (ok) {
+      user = c;
+      break;
+    }
+  }
+  if (!user) return false;
+
+  user.isVerified = true;
+  user.verifyTokenHash = null;
+  user.verifyTokenExpiresAt = null;
+  await user.save();
+
+  return true;
 };
