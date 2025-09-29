@@ -11,6 +11,8 @@ import errorHandler from './middlewares/errorHandler.js';
 import authRouter from './routers/auth.router.js';
 import fileRouter from './routers/file.router.js';
 import postRouter from './routers/post.router.js';
+import userRoutes from './routers/user.router.js';
+import exploreRoutes from './routers/explore.router.js';
 
 const startServer = () => {
   const app = express();
@@ -42,6 +44,9 @@ const startServer = () => {
   app.use('/api/auth', authRouter);
   app.use('/api/files', fileRouter);
   app.use('/api/posts', postRouter);
+  
+  app.use('/api/users', userRoutes);
+  app.use('/api/explore', exploreRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
