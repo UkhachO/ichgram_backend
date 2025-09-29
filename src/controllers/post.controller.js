@@ -13,7 +13,7 @@ export const create = async (req, res, next) => {
     const post = await postService.createPost({
       authorId: req.user.id,
       description: value.description,
-      fileBuffer: req.file?.buffer, // ← multer кладе buffer сюди
+      filePath: req.file?.path,
     });
     res.status(201).json({ ok: true, post });
   } catch (e) {
@@ -23,16 +23,20 @@ export const create = async (req, res, next) => {
 
 export const getOne = async (req, res, next) => {
   try {
-    const post = await postService.getPostById(req.params.id);
-    res.json({ ok: true, post });
+    const data = await postService.getPostById({
+      id: req.params.id,
+      requesterId: req.user?.id,
+    });
+    res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
   }
 };
 
+
 export const remove = async (req, res, next) => {
   try {
-    const data = await postService.deletePost({
+    const data = await postService.removePost({
       id: req.params.id,
       requesterId: req.user.id,
     });
@@ -51,7 +55,7 @@ export const update = async (req, res, next) => {
       id: req.params.id,
       requesterId: req.user.id,
       description: value.description,
-      fileBuffer: req.file?.buffer,
+      filePath: req.file?.path,
     });
     res.json({ ok: true, post });
   } catch (e) {
@@ -64,7 +68,10 @@ export const list = async (req, res, next) => {
     const { value } = listPostsSchema.validate(req.query, {
       abortEarly: false,
     });
-    const data = await postService.listPosts(value);
+    const data = await postService.listPosts({
+      ...value,
+      requesterId: req.user?.id,
+    });
     res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
