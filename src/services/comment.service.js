@@ -12,6 +12,13 @@ export const addComment = async ({ postId, authorId, text }) => {
     text: text.trim(),
   });
 
+  await notificationService.create({
+    recipientId: post.author, 
+    actorId: authorId, 
+    postId,
+    commentId: comment._id,
+  });
+
   return comment.populate('author', 'username fullName avatarUrl');
 };
 

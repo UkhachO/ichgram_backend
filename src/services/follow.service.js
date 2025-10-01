@@ -2,6 +2,7 @@ import Follow from '../db/models/Follow.js';
 import User from '../db/models/User.js';
 import HttpError from '../utils/HttpError.js';
 import { getIO } from '../utils/ws.js';
+import * as notificationService from '../services/notification.service.js';
 
 export const followUser = async ({ followerId, targetUserId }) => {
   if (followerId === String(targetUserId)) {
@@ -16,6 +17,13 @@ export const followUser = async ({ followerId, targetUserId }) => {
       follower: followerId,
       following: targetUserId,
     });
+
+    await notificationService.create({
+      recipientId: targetUserId, 
+      actorId: followerId, 
+      type: 'follow',
+    });
+
 
     try {
       const io = getIO?.();

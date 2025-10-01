@@ -15,6 +15,7 @@ import userRoutes from './routers/user.router.js';
 import exploreRoutes from './routers/explore.router.js';
 import messageRouter from './routers/message.router.js';
 import followRouter from './routers/follow.router.js';
+import notificationRouter from './routers/notification.router.js';
 
 const startServer = () => {
   const app = express();
@@ -53,6 +54,8 @@ const startServer = () => {
   app.use('/api/messages', messageRouter);
 
   app.use('/api/follows', followRouter);
+
+  app.use('/api/notifications', notificationRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

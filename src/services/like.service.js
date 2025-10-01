@@ -13,8 +13,18 @@ export const toggleLike = async ({ postId, userId }) => {
     return { liked: false };
   }
 
-  await Like.create({ post: postId, user: userId });
+  // 👉 створюємо лайк
+  const like = await Like.create({ post: postId, user: userId });
   await Post.updateOne({ _id: postId }, { $inc: { likes: 1 } });
+
+  // 🔔 створення сповіщення про лайк
+  await notificationService.create({
+    recipientId: post.author, // кому сповіщення
+    actorId: userId, // хто лайкнув
+    type: 'like',
+    postId,
+  });
+
   return { liked: true };
 };
 
