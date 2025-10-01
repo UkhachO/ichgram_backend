@@ -14,6 +14,7 @@ import postRouter from './routers/post.router.js';
 import userRoutes from './routers/user.router.js';
 import exploreRoutes from './routers/explore.router.js';
 import messageRouter from './routers/message.router.js';
+import followRouter from './routers/follow.router.js';
 
 const startServer = () => {
   const app = express();
@@ -50,6 +51,8 @@ const startServer = () => {
   app.use('/api/explore', exploreRoutes);
 
   app.use('/api/messages', messageRouter);
+
+  app.use('/api/follows', followRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
