@@ -14,7 +14,7 @@ export const send = async (req, res, next) => {
       toId: req.params.userId,
       text: value.text,
     });
-    res.status(201).json({ ok: true, data });
+    res.json({ ok: true, data });
   } catch (e) {
     next(e);
   }
@@ -25,11 +25,11 @@ export const dialog = async (req, res, next) => {
     const { value } = listDialogSchema.validate(req.query, {
       abortEarly: false,
     });
-    const data = await messageService.getDialog({
+    const data = await messageService.listDialog({
       userId: req.user.id,
-      withId: req.params.userId,
-      limit: value.limit,
-      before: value.before,
+      partnerId: req.params.userId,
+      limit: Number(value.limit) || 30,
+      before: value.before ? new Date(value.before) : null,
     });
     res.json({ ok: true, ...data });
   } catch (e) {

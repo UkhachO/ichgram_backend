@@ -5,7 +5,6 @@ export const getExplorePosts = async (
   { page = 1, limit = 12 },
   currentUserId = null
 ) => {
- 
   const size = limit;
   const pipeline = [
     { $sample: { size } },

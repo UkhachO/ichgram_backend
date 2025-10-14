@@ -21,85 +21,42 @@ export const createPost = async ({ authorId, description, filePath }) => {
     'author',
     'username fullName avatarUrl'
   );
-
   const post = populated.toObject();
-  post.likedByMe = false; 
-
+  post.likedByMe = false;
   return post;
 };
 
-export const getPostById = async ({ id, requesterId }) => {
-  const postDoc = await Post.findById(id).populate(
+export const updatePost = async ({ id, requesterId, description }) => {
+  const post = await Post.findById(id);
+  if (!post) throw HttpError(404, 'Post not found');
+
+  const isOwner = String(post.author) === String(requesterId);
+  if (!isOwner) throw HttpError(403, 'Forbidden');
+
+  post.description = (description ?? post.description ?? '').trim();
+  await post.save();
+
+  const populated = await post.populate(
     'author',
     'username fullName avatarUrl'
   );
-  if (!postDoc) throw HttpError(404, 'Post not found');
-
-  const isOwner =
-    requesterId && String(postDoc.author._id) === String(requesterId);
-  const likedByMe = requesterId
-    ? await isPostLikedByUser({ postId: id, userId: requesterId })
-    : false;
-
-  const post = postDoc.toObject();
-  post.likedByMe = likedByMe;
-
-  return { post, isOwner };
-};
-
-export const updatePost = async ({
-  id,
-  requesterId,
-  description,
-  filePath,
-}) => {
-  const postDoc = await Post.findById(id);
-  if (!postDoc) throw HttpError(404, 'Post not found');
-
-  if (String(postDoc.author) !== String(requesterId)) {
-    throw HttpError(403, 'Forbidden');
-  }
-
-  if (typeof description === 'string') {
-    postDoc.description = description.trim();
-  }
-
-  if (filePath) {
-    
-    if (postDoc.imagePublicId) {
-      await deleteFromCloudinary(postDoc.imagePublicId);
-    }
-    const { url, publicId } = await uploadToCloudinary(filePath, {
-      folder: 'posts',
-    });
-    postDoc.imageUrl = url;
-    postDoc.imagePublicId = publicId;
-  }
-
-  await postDoc.save();
-
-  const populated = await postDoc.populate(
-    'author',
-    'username fullName avatarUrl'
-  );
-  const post = populated.toObject();
-  return post;
+  const result = populated.toObject();
+  result.likedByMe = await isPostLikedByUser({
+    postId: id,
+    userId: requesterId,
+  });
+  return result;
 };
 
 export const removePost = async ({ id, requesterId }) => {
-  const postDoc = await Post.findById(id);
-  if (!postDoc) throw HttpError(404, 'Post not found');
+  const post = await Post.findById(id);
+  if (!post) throw HttpError(404, 'Post not found');
 
-  if (String(postDoc.author) !== String(requesterId)) {
-    throw HttpError(403, 'Forbidden');
-  }
+  const isOwner = String(post.author) === String(requesterId);
+  if (!isOwner) throw HttpError(403, 'Forbidden');
 
-  if (postDoc.imagePublicId) {
-    await deleteFromCloudinary(postDoc.imagePublicId);
-  }
-
-  await postDoc.deleteOne();
-  return { ok: true };
+  await deleteFromCloudinary(post.imagePublicId);
+  await post.deleteOne();
 };
 
 export const listPosts = async ({
@@ -108,33 +65,34 @@ export const listPosts = async ({
   limit = 12,
   requesterId,
 }) => {
-  const query = author ? { author } : {};
+  const q = {};
+  if (author) q.author = author;
 
-  const [docs, total] = await Promise.all([
-    Post.find(query)
+  const [items, total] = await Promise.all([
+    Post.find(q)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('author', 'username fullName avatarUrl'),
-    Post.countDocuments(query),
+      .populate('author', 'username fullName avatarUrl')
+      .lean(),
+    Post.countDocuments(q),
   ]);
 
-  const items = await Promise.all(
-    docs.map(async (doc) => {
-      const likedByMe = requesterId
-        ? await isPostLikedByUser({ postId: doc._id, userId: requesterId })
-        : false;
-      const post = doc.toObject();
-      post.likedByMe = likedByMe;
-      return post;
-    })
+  const enriched = await Promise.all(
+    items.map(async (p) => ({
+      ...p,
+      likedByMe: await isPostLikedByUser({
+        postId: p._id,
+        userId: requesterId,
+      }),
+    }))
   );
 
   return {
-    items,
+    items: enriched,
+    total,
     page,
     limit,
-    total,
     pages: Math.ceil(total / limit) || 1,
   };
 };

@@ -19,11 +19,10 @@ export const followUser = async ({ followerId, targetUserId }) => {
     });
 
     await notificationService.create({
-      recipientId: targetUserId, 
-      actorId: followerId, 
+      recipientId: targetUserId,
+      actorId: followerId,
       type: 'follow',
     });
-
 
     try {
       const io = getIO?.();
@@ -35,9 +34,7 @@ export const followUser = async ({ followerId, targetUserId }) => {
           _id: String(doc._id),
         });
       }
-    } catch {
- 
-    }
+    } catch {}
 
     return { _id: doc._id };
   } catch (e) {

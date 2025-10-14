@@ -16,7 +16,7 @@ export const create = async (req, res, next) => {
       authorId: req.user.id,
       text: value.text,
     });
-    res.status(201).json({ ok: true, comment });
+    res.status(201).json({ ok: true, data: comment });
   } catch (e) {
     next(e);
   }
@@ -30,7 +30,8 @@ export const listForPost = async (req, res, next) => {
     });
     const data = await commentService.listCommentsForPost({
       postId: id,
-      ...value,
+      page: value.page,
+      limit: value.limit,
     });
     res.json({ ok: true, ...data });
   } catch (e) {

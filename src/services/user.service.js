@@ -1,10 +1,11 @@
 import User from '../db/models/User.js';
+const escapeRe = (s = '') => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const searchUsers = async ({ q, page = 1, limit = 12 }) => {
   const skip = (page - 1) * limit;
-
-  const usernameRe = new RegExp(`^${q}`, 'i');
-  const nameRe = new RegExp(q, 'i');
+  const safe = escapeRe(q.trim());
+  const usernameRe = new RegExp(safe, 'i');
+  const nameRe = new RegExp(safe, 'i');
 
   const where = { $or: [{ username: usernameRe }, { fullName: nameRe }] };
 
@@ -29,6 +30,6 @@ export const searchUsers = async ({ q, page = 1, limit = 12 }) => {
     page,
     limit,
     total,
-    totalPages: Math.ceil(total / limit) || 1,
+    pages: Math.ceil(total / limit) || 1,
   };
 };

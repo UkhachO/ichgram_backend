@@ -6,9 +6,9 @@ const FOLDER = process.env.CLOUDINARY_FOLDER || 'ichgram';
 export const uploadToCloudinary = async (localPath, options = {}) => {
   try {
     const res = await cloudinary.uploader.upload(localPath, {
-      folder: FOLDER,
+      folder: options.folder || FOLDER,
       resource_type: 'image',
-      ...options,
+      overwrite: true,
     });
     return { url: res.secure_url, publicId: res.public_id };
   } finally {
@@ -19,26 +19,8 @@ export const uploadToCloudinary = async (localPath, options = {}) => {
 };
 
 export const deleteFromCloudinary = async (publicId) => {
-  if (!publicId) return { ok: true };
-  await cloudinary.uploader.destroy(publicId);
-  return { ok: true };
+  if (!publicId) return;
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+  } catch {}
 };
-
-export const uploadBufferToCloudinary = (buffer, opts = {}) =>
-  new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: opts.folder || 'uploads',
-        resource_type: 'image',
-        overwrite: true,
-      },
-      (err, res) =>
-        err
-          ? reject(err)
-          : resolve({ url: res.secure_url, publicId: res.public_id })
-    );
-    stream.end(buffer);
-  });
-
-
-

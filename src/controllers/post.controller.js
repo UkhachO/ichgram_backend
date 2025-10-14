@@ -15,32 +15,7 @@ export const create = async (req, res, next) => {
       description: value.description,
       filePath: req.file?.path,
     });
-    res.status(201).json({ ok: true, post });
-  } catch (e) {
-    next(e);
-  }
-};
-
-export const getOne = async (req, res, next) => {
-  try {
-    const data = await postService.getPostById({
-      id: req.params.id,
-      requesterId: req.user?.id,
-    });
-    res.json({ ok: true, ...data });
-  } catch (e) {
-    next(e);
-  }
-};
-
-
-export const remove = async (req, res, next) => {
-  try {
-    const data = await postService.removePost({
-      id: req.params.id,
-      requesterId: req.user.id,
-    });
-    res.json({ ok: true, ...data });
+    res.status(201).json({ ok: true, data: post });
   } catch (e) {
     next(e);
   }
@@ -55,9 +30,20 @@ export const update = async (req, res, next) => {
       id: req.params.id,
       requesterId: req.user.id,
       description: value.description,
-      filePath: req.file?.path,
     });
-    res.json({ ok: true, post });
+    res.json({ ok: true, data: post });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const remove = async (req, res, next) => {
+  try {
+    await postService.removePost({
+      id: req.params.id,
+      requesterId: req.user.id,
+    });
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }
@@ -73,6 +59,18 @@ export const list = async (req, res, next) => {
       requesterId: req.user?.id,
     });
     res.json({ ok: true, ...data });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getOne = async (req, res, next) => {
+  try {
+    const post = await postService.getPostById({
+      id: req.params.id,
+      requesterId: req.user?.id,
+    });
+    res.json({ ok: true, data: post });
   } catch (e) {
     next(e);
   }

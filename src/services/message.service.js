@@ -1,7 +1,7 @@
+import mongoose from 'mongoose';
 import Message from '../db/models/Message.js';
 import User from '../db/models/User.js';
 import HttpError from '../utils/HttpError.js';
-import mongoose from 'mongoose';
 
 export const sendMessage = async ({ fromId, toId, text }) => {
   if (!mongoose.isValidObjectId(toId))
@@ -9,43 +9,49 @@ export const sendMessage = async ({ fromId, toId, text }) => {
   const toUser = await User.findById(toId).select('_id');
   if (!toUser) throw HttpError(404, 'Recipient not found');
 
-  const doc = await Message.create({ from: fromId, to: toId, text });
-  const populated = await doc
-    .populate('from', 'username fullName')
-    .populate('to', 'username fullName');
+  const doc = await Message.create({
+    from: fromId,
+    to: toId,
+    text: String(text || '').trim(),
+  });
 
-  return {
-    id: populated.id,
-    from: populated.from,
-    to: populated.to,
-    text: populated.text,
-    createdAt: populated.createdAt,
-    readAt: populated.readAt,
-  };
+  const populated = await doc
+    .populate('from', 'username fullName avatarUrl')
+    .populate('to', 'username fullName avatarUrl');
+
+  return populated.toObject();
 };
 
-export const getDialog = async ({ userId, withId, limit = 30, before }) => {
-  if (!mongoose.isValidObjectId(withId)) throw HttpError(400, 'Invalid user');
+export const listDialog = async ({
+  userId,
+  partnerId,
+  limit = 30,
+  before = null,
+}) => {
+  if (!mongoose.isValidObjectId(partnerId))
+    throw HttpError(400, 'Invalid partner');
 
-  const match = {
+  const q = {
     $or: [
-      { from: userId, to: withId },
-      { from: withId, to: userId },
+      { from: userId, to: partnerId },
+      { from: partnerId, to: userId },
     ],
   };
-  if (before) match.createdAt = { $lt: new Date(before) };
+  if (before) q.createdAt = { $lt: before };
 
-  const items = await Message.find(match)
+  const items = await Message.find(q)
     .sort({ createdAt: -1 })
     .limit(limit)
-    .populate('from', 'username fullName')
-    .populate('to', 'username fullName')
+    .populate('from', 'username fullName avatarUrl')
+    .populate('to', 'username fullName avatarUrl')
     .lean();
 
-  return { items: items.reverse() }; 
+  return { items: items.reverse(), limit, hasMore: items.length === limit };
 };
 
 export const markAsRead = async ({ userId, fromId }) => {
+  if (!mongoose.isValidObjectId(fromId))
+    throw HttpError(400, 'Invalid partner');
   const res = await Message.updateMany(
     { to: userId, from: fromId, readAt: null },
     { $set: { readAt: new Date() } }
@@ -69,11 +75,10 @@ export const getConversations = async ({ userId }) => {
         },
       },
     },
-    { $sort: { createdAt: -1 } },
     {
       $group: {
         _id: '$partner',
-        lastMessage: { $first: '$$ROOT' },
+        lastMessage: { $last: '$$ROOT' },
         unread: { $sum: '$isUnread' },
       },
     },
@@ -88,21 +93,19 @@ export const getConversations = async ({ userId }) => {
     { $unwind: '$partner' },
     {
       $project: {
-        partner: {
-          _id: '$partner._id',
-          username: '$partner.username',
-          fullName: '$partner.fullName',
-        },
+        partner: { _id: 1, username: 1, fullName: 1, avatarUrl: 1 },
         lastMessage: {
           _id: '$lastMessage._id',
           from: '$lastMessage.from',
           to: '$lastMessage.to',
           text: '$lastMessage.text',
           createdAt: '$lastMessage.createdAt',
+          readAt: '$lastMessage.readAt',
         },
         unread: 1,
       },
     },
+    { $sort: { 'lastMessage.createdAt': -1 } },
   ];
 
   const items = await Message.aggregate(pipeline);

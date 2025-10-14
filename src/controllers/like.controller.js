@@ -16,12 +16,29 @@ export const toggle = async (req, res, next) => {
 
 export const listForPost = async (req, res, next) => {
   try {
+    const { id } = req.params;
     const { value } = listLikesSchema.validate(req.query, {
       abortEarly: false,
     });
-    const { id } = req.params;
-    const data = await likeService.listLikesForPost({ postId: id, ...value });
+    const data = await likeService.listLikesForPost({
+      postId: id,
+      page: Number(value.page) || 1,
+      limit: Number(value.limit) || 20,
+    });
     res.json({ ok: true, ...data });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const isLiked = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const liked = await likeService.isPostLikedByUser({
+      postId: id,
+      userId: req.user?.id,
+    });
+    res.json({ ok: true, liked });
   } catch (e) {
     next(e);
   }

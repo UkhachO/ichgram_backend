@@ -1,181 +1,155 @@
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
 import User from '../db/models/User.js';
-import Session from '../db/models/Session.js';
 import HttpError from '../utils/HttpError.js';
 import { signAccessToken } from '../utils/tokens.js';
 import {
   sendVerificationEmail,
   sendResetPasswordEmail,
 } from './email.service.js';
-import {
-  generateVerifyToken,
-  hashVerifyToken,
-  isVerifyTokenMatch,
-} from '../utils/verification.js';
+import { generateVerifyToken, hashVerifyToken } from '../utils/verification.js';
 import {
   generateResetTokenRaw,
   hashResetToken,
 } from '../utils/resetPassword.js';
 
-const VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const RESET_TTL_MS = 60 * 60 * 1000; // 1h
+const CLIENT_URL =
+  process.env.CLIENT_URL?.replace(/\/+$/, '') || 'http://localhost:5173';
+const VERIFY_EXPIRES_HOURS = 24;
 
-export const register = async ({ fullName, username, email, password }) => {
-  fullName = String(fullName).trim();
-  username = String(username).toLowerCase().trim();
-  email = String(email).toLowerCase().trim();
+export async function registerUser({ email, fullName, username, password }) {
+  const user = await User.create({ email, fullName, username, password });
 
-  const exists = await User.findOne({ $or: [{ email }, { username }] });
-  if (exists) throw HttpError(409, 'User already exists');
+  const rawToken = generateVerifyToken(32);
+  const tokenHash = await hashVerifyToken(rawToken);
 
-  const pwdHash = await bcrypt.hash(password, 10);
-
-  const rawVerify = generateVerifyToken(32);
-  const verifyTokenHash = await hashVerifyToken(rawVerify);
-  const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TTL_MS);
-
-  const user = await User.create({
-    fullName,
-    username,
-    email,
-    password: pwdHash,
-    isVerified: false,
-    verifyTokenHash,
-    verifyTokenExpiresAt,
-  });
-
-  const appUrl =
-    (process.env.APP_URL || '').replace(/\/+$/, '') || 'http://localhost:3000';
-  const link = `${appUrl}/api/auth/verify/${rawVerify}`;
-  await sendVerificationEmail({ to: email, link });
-
-  return {
-    user: {
-      id: user.id,
-      fullName: user.fullName,
-      username: user.username,
-      email: user.email,
-      isVerified: user.isVerified,
-    },
-    message: 'Registered. Verification email sent.',
-  };
-};
-
-export const login = async ({ emailOrUsername, password, meta }) => {
-  const user = await User.findOne({
-    $or: [
-      { email: emailOrUsername.toLowerCase() },
-      { username: emailOrUsername.toLowerCase() },
-    ],
-  });
-  if (!user) throw HttpError(401, 'Invalid credentials');
-
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) throw HttpError(401, 'Invalid credentials');
-
-  const tokenId = crypto.randomUUID();
-  const token = signAccessToken({
-    sub: user.id,
-    tid: tokenId,
-  });
-
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  await Session.create({
-    userId: user.id,
-    tokenId,
-    expiresAt,
-    ip: meta?.ip,
-    userAgent: meta?.userAgent,
-  });
-
-  return {
-    token,
-    user: {
-      id: user.id,
-      fullName: user.fullName,
-      username: user.username,
-      email: user.email,
-      isVerified: user.isVerified,
-      avatarUrl: user.avatarUrl ?? null,
-    },
-  };
-};
-
-export const logout = async ({ userId, tokenId }) => {
-  if (!userId || !tokenId) return { ok: true };
-  await Session.deleteOne({ userId, tokenId });
-  return { ok: true };
-};
-
-export const startPasswordReset = async (email) => {
-  email = String(email).toLowerCase().trim();
-  const user = await User.findOne({ email });
-  if (!user) return { ok: true };
-
-  const raw = generateResetTokenRaw();
-  const hash = hashResetToken(raw);
-
-  user.resetPasswordTokenHash = hash;
-  user.resetPasswordTokenExp = new Date(Date.now() + RESET_TTL_MS);
-  user.resetPasswordUsed = false;
+  user.verifyTokenHash = tokenHash;
+  user.verifyTokenExpiresAt = new Date(
+    Date.now() + VERIFY_EXPIRES_HOURS * 3600 * 1000
+  );
   await user.save();
 
-  const appUrl =
-    (process.env.APP_URL || '').replace(/\/+$/, '') || 'http://localhost:3000';
+  const link = `${CLIENT_URL}/verify?id=${user._id}&token=${rawToken}`;
 
-  const link = `${appUrl}/reset-password?token=${raw}`;
-  await sendResetPasswordEmail({ to: email, link });
+  await sendVerificationEmail({ to: user.email, link });
 
-  return { ok: true };
-};
+  return { id: user._id };
+}
 
-export const finishPasswordReset = async (rawToken, newPassword) => {
-  const hash = hashResetToken(rawToken);
+export async function verifyUserEmail({ id, token }) {
+  const user = await User.findById(id);
+  if (!user) throw new Error('User not found');
 
-  const user = await User.findOne({
-    resetPasswordTokenHash: hash,
-    resetPasswordUsed: false,
-    resetPasswordTokenExp: { $gt: new Date() },
-  });
+  if (user.isVerified) return { ok: true };
 
-  if (!user) throw HttpError(400, 'Invalid or expired token');
-
-  const pwdHash = await bcrypt.hash(newPassword, 10);
-  user.password = pwdHash;
-
-  user.passwordChangedAt = new Date();
-  user.resetPasswordUsed = true;
-  user.resetPasswordTokenHash = null;
-  user.resetPasswordTokenExp = null;
-
-  await user.save();
-
-  return { ok: true };
-};
-
-export const finishEmailVerification = async (rawToken) => {
-
-  const candidates = await User.find({
-    isVerified: false,
-    verifyTokenHash: { $ne: null },
-    verifyTokenExpiresAt: { $gt: new Date() },
-  });
-
-  let user = null;
-  for (const c of candidates) {
-    const ok = await isVerifyTokenMatch(rawToken, c.verifyTokenHash);
-    if (ok) {
-      user = c;
-      break;
-    }
+  if (!user.verifyTokenHash || !user.verifyTokenExpiresAt) {
+    throw new Error('Verification token missing');
   }
-  if (!user) return false;
+  if (user.verifyTokenExpiresAt.getTime() < Date.now()) {
+    throw new Error('Verification token expired');
+  }
+
+  const ok = await isVerifyTokenMatch(token, user.verifyTokenHash);
+  if (!ok) throw new Error('Invalid verification token');
 
   user.isVerified = true;
   user.verifyTokenHash = null;
   user.verifyTokenExpiresAt = null;
   await user.save();
 
-  return true;
+  return { ok: true };
+}
+
+export const login = async ({ emailOrUsername, password }) => {
+  const key = String(emailOrUsername || '')
+    .trim()
+    .toLowerCase();
+  const pass = String(password || '');
+
+  const user = await User.findOne({
+    $or: [{ email: key }, { username: key }],
+  }).select('+password');
+
+  console.log('DBG/login step1', { key, hasUser: !!user });
+
+  if (!user) throw HttpError(401, 'Invalid credentials');
+
+  const cmp = await bcrypt.compare(pass, user.password);
+  console.log('DBG/login step2', { hashLen: user.password?.length, cmp });
+
+  if (!cmp) throw HttpError(401, 'Invalid credentials');
+
+  const accessToken = signAccessToken({ sub: user.id });
+
+  return {
+    accessToken,
+    user: {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      isVerified: user.isVerified,
+    },
+  };
+};
+
+export const getMe = async (userId) => {
+  const user = await User.findById(userId)
+    .select('_id fullName username email isVerified avatarUrl')
+    .lean();
+  if (!user) throw HttpError(404, 'User not found');
+  return user;
+};
+
+export const forgotPassword = async (email) => {
+  const APP_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(
+    /\/+$/,
+    ''
+  );
+
+  const user = await User.findOne({
+    email: String(email || '')
+      .toLowerCase()
+      .trim(),
+  });
+  if (!user) return;
+
+  const raw = generateResetTokenRaw();
+  const hash = hashResetToken(raw);
+
+  user.resetPasswordTokenHash = hash;
+  user.resetPasswordTokenExp = new Date(Date.now() + 60 * 60 * 1000);
+  user.resetPasswordUsed = false;
+  await user.save();
+
+  const link = `${APP_URL}/auth/reset?token=${raw}`;
+
+  await sendResetPasswordEmail({
+    to: user.email,
+    link,
+    fullName: user.fullName || user.username,
+  });
+};
+
+export const resetPassword = async ({ token, password }) => {
+  if (!token) throw HttpError(400, 'Token required');
+
+  const hash = hashResetToken(token);
+
+  const user = await User.findOne({
+    resetPasswordTokenHash: hash,
+    resetPasswordTokenExp: { $gt: new Date() },
+    resetPasswordUsed: false,
+  });
+  if (!user) throw HttpError(400, 'Invalid or expired token');
+
+  user.password = String(password);
+
+  user.resetPasswordTokenHash = null;
+  user.resetPasswordTokenExp = null;
+  user.resetPasswordUsed = true;
+  user.passwordChangedAt = new Date();
+
+  await user.save();
 };

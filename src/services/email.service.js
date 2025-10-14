@@ -11,15 +11,15 @@ export const mailer = nodemailer.createTransport({
 
 export async function sendVerificationEmail({ to, link }) {
   const from = `"ichgram" <${SMTP_USER}>`;
-  const subject = 'Підтвердження електронної пошти';
+  const subject = 'Подтверждение электронной почты';
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;line-height:1.6">
-      <h2>Підтвердіть ваш email</h2>
-      <p>Щоб активувати акаунт, перейдіть за посиланням:</p>
+      <h2>Подтвердите ваш email</h2>
+      <p>Чтобы активировать аккаунт, перейдите по ссылке:</p>
       <p><a href="${link}" target="_blank" rel="noopener">${link}</a></p>
-      <p>Посилання діє 24 години.</p>
+      <p>Ссылка действует 24 часа.</p>
       <hr/>
-      <p style="font-size:12px;color:#666">Якщо ви не реєструвалися — проігноруйте цей лист.</p>
+      <p style="font-size:12px;color:#666">Если вы не регистрировались, проигнорируйте это письмо.</p>
     </div>
   `;
   await mailer.sendMail({ from, to, subject, html });
@@ -27,14 +27,14 @@ export async function sendVerificationEmail({ to, link }) {
 
 export async function sendResetPasswordEmail({ to, link }) {
   const from = `"ichgram" <${SMTP_USER}>`;
-  const subject = 'Відновлення паролю';
+  const subject = 'Восстановление пароля';
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;line-height:1.6">
-      <h2>Відновлення паролю</h2>
-      <p>Щоб змінити пароль, перейдіть за посиланням (діє обмежений час):</p>
+      <h2>Восстановление пароля</h2>
+      <p>Чтобы изменить пароль, перейдите по ссылке (действует ограниченное время):</p>
       <p><a href="${link}" target="_blank" rel="noopener">${link}</a></p>
       <hr/>
-      <p style="font-size:12px;color:#666">Якщо це були не ви — проігноруйте лист.</p>
+      <p style="font-size:12px;color:#666">Если это были не вы – проигнорируйте письмо.</p>
     </div>
   `;
   await mailer.sendMail({ from, to, subject, html });

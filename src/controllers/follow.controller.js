@@ -1,14 +1,14 @@
 import * as followService from '../services/follow.service.js';
+import HttpError from '../utils/HttpError.js';
 
 export const follow = async (req, res, next) => {
   try {
-    const followerId = req.user.id;
-    const { userId } = req.params;
+    const { userId: targetUserId } = req.params;
     const data = await followService.followUser({
-      followerId,
-      targetUserId: userId,
+      requesterId: req.user.id,
+      targetUserId,
     });
-    res.status(201).json({ ok: true, data });
+    res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
   }
@@ -16,43 +16,46 @@ export const follow = async (req, res, next) => {
 
 export const unfollow = async (req, res, next) => {
   try {
-    const followerId = req.user.id;
-    const { userId } = req.params;
+    const { userId: targetUserId } = req.params;
     const data = await followService.unfollowUser({
-      followerId,
-      targetUserId: userId,
+      requesterId: req.user.id,
+      targetUserId,
     });
-    res.json({ ok: true, data });
+    res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
   }
 };
 
-export const followers = async (req, res, next) => {
+export const listFollowers = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const { page, limit } = req.query;
-    const data = await followService.getFollowers({
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+
+    const data = await followService.listFollowers({
       userId,
-      page: Number(page),
-      limit: Number(limit),
+      page,
+      limit,
     });
-    res.json({ ok: true, data });
+    res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
   }
 };
 
-export const following = async (req, res, next) => {
+export const listFollowing = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const { page, limit } = req.query;
-    const data = await followService.getFollowing({
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+
+    const data = await followService.listFollowing({
       userId,
-      page: Number(page),
-      limit: Number(limit),
+      page,
+      limit,
     });
-    res.json({ ok: true, data });
+    res.json({ ok: true, ...data });
   } catch (e) {
     next(e);
   }

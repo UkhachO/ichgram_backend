@@ -1,15 +1,16 @@
 import HttpError from '../utils/HttpError.js';
 
-const validateBody = (schema) => (req, _res, next) => {
-  const { error, value } = schema.validate(req.body, {
-    abortEarly: false,
-    stripUnknown: true,
-  });
-  if (error) {
-    return next(HttpError(400, 'Validation error'));
+const validateBody = (schema) => async (req, _res, next) => {
+  try {
+    const value = await schema.validateAsync(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+    req.body = value;
+    next();
+  } catch (e) {
+    next(HttpError(400, e.message || 'Validation error'));
   }
-  req.body = value;
-  next();
 };
 
 export default validateBody;

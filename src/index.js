@@ -9,4 +9,7 @@ const bootstrap = async () => {
   startWsServer();
 };
 
-bootstrap();
+bootstrap().catch((e) => {
+  console.error('[BOOT] Failed:', e);
+  process.exit(1);
+});

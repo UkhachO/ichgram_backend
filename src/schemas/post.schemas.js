@@ -2,13 +2,11 @@ import Joi from 'joi';
 
 export const createPostSchema = Joi.object({
   description: Joi.string().allow('').max(2200),
-
 });
 
 export const updatePostSchema = Joi.object({
   description: Joi.string().allow('').max(2200),
-  
-}).or('description'); 
+}).or('description');
 
 export const listPostsSchema = Joi.object({
   author: Joi.string().hex().length(24),

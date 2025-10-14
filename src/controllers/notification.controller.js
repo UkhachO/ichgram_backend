@@ -11,7 +11,8 @@ export const list = async (req, res, next) => {
     });
     const data = await notificationService.list({
       userId: req.user.id,
-      ...value,
+      page: value.page,
+      limit: value.limit,
     });
     res.json({ ok: true, ...data });
   } catch (e) {
@@ -32,11 +33,9 @@ export const readOne = async (req, res, next) => {
   }
 };
 
-export const readAll = async (_req, res, next) => {
+export const readAll = async (req, res, next) => {
   try {
-    const data = await notificationService.markAllRead({
-      userId: _req.user.id,
-    });
+    const data = await notificationService.markAllRead({ userId: req.user.id });
     res.json({ ok: true, ...data });
   } catch (e) {
     next(e);

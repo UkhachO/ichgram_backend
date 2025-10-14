@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { objectIdSchema } from './shared.js'; 
+import { objectIdSchema } from './shared.js';
 
 export const targetUserParamSchema = Joi.object({
   userId: objectIdSchema.required(),

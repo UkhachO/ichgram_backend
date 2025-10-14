@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import authGuard from '../middlewares/authGuard.js';
+import authGuard from '../middlewares/authenticate.js';
 import upload from '../middlewares/upload.js';
 import * as fileCtrl from '../controllers/file.controller.js';
 

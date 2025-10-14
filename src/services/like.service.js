@@ -1,6 +1,7 @@
 import Like from '../db/models/Like.js';
 import Post from '../db/models/Post.js';
 import HttpError from '../utils/HttpError.js';
+import * as notificationService from './notification.service.js';
 
 export const toggleLike = async ({ postId, userId }) => {
   const post = await Post.findById(postId);
@@ -13,14 +14,12 @@ export const toggleLike = async ({ postId, userId }) => {
     return { liked: false };
   }
 
-  // 👉 створюємо лайк
-  const like = await Like.create({ post: postId, user: userId });
+  await Like.create({ post: postId, user: userId });
   await Post.updateOne({ _id: postId }, { $inc: { likes: 1 } });
 
-  // 🔔 створення сповіщення про лайк
   await notificationService.create({
-    recipientId: post.author, // кому сповіщення
-    actorId: userId, // хто лайкнув
+    recipientId: post.author,
+    actorId: userId,
     type: 'like',
     postId,
   });
@@ -35,7 +34,8 @@ export const listLikesForPost = async ({ postId, page = 1, limit = 20 }) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('user', 'username fullName avatarUrl'),
+      .populate('user', 'username fullName avatarUrl')
+      .lean(),
     Like.countDocuments(query),
   ]);
 
