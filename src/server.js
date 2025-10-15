@@ -1,5 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
@@ -16,21 +17,32 @@ import messageRouter from './routers/message.router.js';
 import followRouter from './routers/follow.router.js';
 import notificationRouter from './routers/notification.router.js';
 
-import cors from 'cors';
 
 const buildCors = () => {
+  const normalize = (u) => u?.toLowerCase().replace(/\/+$/, '');
+
   const list = (process.env.CLIENT_URL || '')
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => normalize(s))
     .filter(Boolean);
+
+  // Дозволяємо локалку та прев’ю-домени Vercel
+  const allowRegex = [/\.vercel\.app$/i];
 
   const cfg = {
     origin(origin, cb) {
-      if (!origin) return cb(null, true);
-      if (list.length && list.includes(origin)) return cb(null, true);
+      if (!origin) return cb(null, true); // дозволити Postman/серверні запити
+
+      const o = normalize(origin);
+      const allowed = list.includes(o) || allowRegex.some((re) => re.test(o));
+
+      if (allowed) return cb(null, true);
+      console.warn(`❌ Blocked by CORS: ${origin}`);
       return cb(new Error('Not allowed by CORS'));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   };
 
   return cfg;
@@ -39,6 +51,7 @@ const buildCors = () => {
 const startServer = () => {
   const app = express();
 
+  app.use(cors(buildCors()));
   app.disable('x-powered-by');
   app.use(helmet());
 
@@ -46,7 +59,7 @@ const startServer = () => {
     app.set('env', 'dev');
   }
 
-  app.use(cors(buildCors()));
+
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
