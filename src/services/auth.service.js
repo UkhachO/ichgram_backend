@@ -22,18 +22,18 @@ export async function registerUser({ email, fullName, username, password }) {
 
   const rawToken = generateVerifyToken(32);
   const tokenHash = await hashVerifyToken(rawToken);
-
   user.verifyTokenHash = tokenHash;
-  user.verifyTokenExpiresAt = new Date(
-    Date.now() + VERIFY_EXPIRES_HOURS * 3600 * 1000
-  );
+  user.verifyTokenExpiresAt = new Date(Date.now() + 24 * 3600 * 1000);
   await user.save();
 
   const link = `${CLIENT_URL}/verify?id=${user._id}&token=${rawToken}`;
 
-  await sendVerificationEmail({ to: user.email, link });
+  // не блокуємо відповідь клієнту
+  queueMicrotask(() =>
+    sendVerificationEmail({ to: user.email, link }).catch(console.error)
+  );
 
-  return { id: user._id };
+  return { id: user._id }; // миттєво
 }
 
 export async function verifyUserEmail({ id, token }) {
