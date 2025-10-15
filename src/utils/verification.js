@@ -6,7 +6,7 @@ export function generateVerifyToken(bytes = 32) {
 }
 
 export async function hashVerifyToken(rawToken) {
-  const saltRounds = 10;
+  const saltRounds = 7;
   return bcrypt.hash(rawToken, saltRounds);
 }
 
